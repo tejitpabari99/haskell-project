@@ -1,4 +1,4 @@
-module Backgammon.Format
+module Format
 ( BoardParserState (..)
 , BoardParseError (..)
 , BoardParseErrorType (..)
@@ -7,9 +7,9 @@ module Backgammon.Format
 )
 where
 
-import Backgammon.Model
+import Model
 
-data BoardParserState 
+data BoardParserState
   -- | the text to parse, position (always 1)
   = Start String Int
   -- | partially read number of black pieces on bar (as string), remaining string to parse, position
@@ -31,7 +31,7 @@ data BoardParserState
 data BoardParseError = BoardParseError String BoardParseErrorType
   deriving (Eq, Show)
 
-data BoardParseErrorType 
+data BoardParseErrorType
   -- | error in parser code
   = InvalidParserStateAtEnd BoardParserState
   -- | pos, actual, expected
@@ -58,14 +58,14 @@ formatBoard (Board points barWhite barBlack) =
 
 -- TODO: docs
 parseBoard :: String -> Either BoardParseError Board
-parseBoard str = 
+parseBoard str =
   case parse (Start str 1) of
     Done b  -> Right b
     Error t -> Left (BoardParseError str t)
     state   -> Left (BoardParseError str (InvalidParserStateAtEnd state))
   where
     parse :: BoardParserState -> BoardParserState
-    parse (Start (h:t) pos) = 
+    parse (Start (h:t) pos) =
       case h of
         'b' -> parse (BlackBar [] t (pos+1))
         '|' -> parse (Contents [] 0 t (pos+1))
@@ -107,4 +107,4 @@ parseBoard str =
     digits = "0123456789"
     endsOfNumber = ".|wb"
     isDigit c = any (== c) digits -- TODO: use ascii codes (more efficient)
-    isEndOfNumber c = any (== c) endsOfNumber 
+    isEndOfNumber c = any (== c) endsOfNumber

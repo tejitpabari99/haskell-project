@@ -26,7 +26,6 @@ import Control.Applicative ((<$>))
 import Control.Monad (foldM, foldM_, forM_)
 import Data.List (elemIndex, foldl', permutations)
 import Data.Maybe (fromMaybe)
-import Debug.Trace(trace)
 
 import Data.Set (Set)
 import qualified Data.Set as Set (elems, empty, fromList)
@@ -113,12 +112,6 @@ initialBoard = Board [ Just (Black, 2), Nothing, Nothing, Nothing, Nothing, Just
                      ]
                      0
                      0
-beforeEndBoard :: Board
-beforeEndBoard = Board [ Just (White, 1), Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing
-                    , Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Just (Black, 1), Just (Black, 1)
-                    ]
-                    13
-                    14
 
 initialDoublingCube :: DoublingCube
 initialDoublingCube = DoublingCube Nothing 1
@@ -305,7 +298,7 @@ legalMoves side board dice = Set.fromList (legalMoves' (Right board) (dieList di
     moves _ _ 25 = []
     moves b d i =
       case pieces b i of
-        Just (s, n) -> if (s == side && i<=24 && ni <= 24) then Move i (i + d * direction side) : nextMoves
+        Just (s, n) -> if (s == side && i<=25 && ni <= 25) then Move i (i + d * direction side) : nextMoves
                                     else nextMoves
         Nothing -> nextMoves
       where nextMoves = moves b d (i+1)
