@@ -175,5 +175,6 @@ bearOffMoves bd@(Board b bw bb) dieRoll side =
                       where ind2 = if side==White then (25-i) else i
     end = if side==White then 25 else 0
 
+-- TODO (implement get_moves from backgammon.py)
 -- legalMoves :: Board -> Dice -> Side -> [Moves]
 -- legalMoves bd@(Board b bw bb) dieRolls side =
