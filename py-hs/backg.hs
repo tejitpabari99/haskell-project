@@ -1,10 +1,5 @@
-import Control.Applicative ((<$>))
-import Control.Monad (foldM, foldM_, forM_)
-import Data.List (elemIndex, foldl', permutations)
-import Data.Maybe (fromMaybe)
-
-import Data.Set (Set)
-import qualified Data.Set as Set (elems, empty, fromList)
+import Debug.Trace(trace)
+import qualified Data.Set as Set
 
 
 type Die = Int
@@ -45,6 +40,7 @@ opposite Black = White
 getChip :: Board -> Pos -> Point
 getChip (Board b _ _) pos = b !! (pos)
 
+
 -- Start with this board
 initialBoard :: Board
 initialBoard = Board [ Nothing, Just (White, 2), Nothing, Nothing, Nothing, Nothing, Just (Black, 5), Nothing, Just (Black, 3), Nothing, Nothing, Nothing, Just (White, 5),
@@ -57,6 +53,13 @@ bearOffBoard :: Board
 bearOffBoard = Board [ Nothing, Nothing, Just (Black, 3), Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing,
                       Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing
                      ] 0 0
+
+-- Board with black chips on bar
+-- Call with dieroll 2
+barBoard :: Board
+barBoard = Board [ Nothing, Nothing, Just (Black, 3), Just (White, 3), Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing,
+                   Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing
+                   ] 0 2
 
 -- Random Test Board
 boardTest1 :: Board
@@ -83,47 +86,25 @@ checkChipSide (p:pts) side = case p of
   Just (s,chips)  | s==side -> False
                   | otherwise -> checkChipSide pts side
 
--- Checks if bearing off is possible
--- Only possible if
--- For Black = no chips on any triangle b/w [7..24]
--- For White = no chips on any triangle b/w [1..18]
-canBearOff :: Board -> Side -> Bool
-canBearOff bd@(Board b bw bb) side
-  | side==Black = (bb==0) && checkChipSide (takeLast 19 b) side
-  | otherwise   = (bw==0) && checkChipSide (take 19 b) side
+dieList :: Dice -> [Die]
+dieList (d1, d2) =
+  if d1 == d2 then [d1, d1, d1, d1]
+              else [d1, d2]
 
--- Get legal moves for a single dice (handles any value 1..36)
-singleDieLegalMoves :: Board -> Die -> Side -> Moves
-singleDieLegalMoves bd d side = moves 1 where
-  moves :: Pos -> Moves
-  moves 25 = []
-  moves i2 =
-    case getChip bd i2 of
-      Nothing -> nextMoves
-      -- if side same as chip, and 1 <= pos,move_pos <= 24 (in the board)
-      Just (s,n) -> if (s == side && i2<=24 && ni <= 24 && i2>=1 && ni>=1)
-                    then case getChip bd ni of
-                      -- Check if move_pos is legal
-                      Nothing -> Move i2 ni : nextMoves
-                      Just (s2,n2)  | s2==side ->   Move i2 ni : nextMoves
-                                    | otherwise ->  if (n2==1)
-                                                    then Move i2 ni : nextMoves
-                                                    else nextMoves
-                    else nextMoves
-      where nextMoves = moves (i2+1)
-            -- find next move_pos
-            ni = (i2 + d * direction side)
 
 -- move chip from 'from' to 'to'
-move :: Side -> Board -> Move -> Board
-move side board m@(Move from to) =
-  case getChip board from of
-    Just (s, _) -> landPiece to side (takePiece from board)
-    Nothing     -> error ("no getChip for move " ++ show board ++ " " ++ show from)
+move :: Board -> Side -> Move -> Board
+move board side m@(Move from to) = landPiece to side (takePiece from board side)
+  -- case getChip board from of
+  --   Just (_, _) -> landPiece to side (takePiece from board side)
+  --   Nothing     -> error ("no getChip for move " ++ show board ++ " " ++ show from)
 
 -- take piece from the board, throws error on nonlegality
-takePiece :: Pos -> Board -> Board
-takePiece pos board@(Board b bw bb) =
+takePiece :: Pos -> Board -> Side -> Board
+takePiece (-1) board@(Board b bw bb) side
+  | side==White && bw>0 = Board b (bw-1) bb
+  | side==Black && bb>0 = Board b bw (bb-1)
+takePiece pos board@(Board b bw bb) _ =
   case getChip board pos of
     Just (s, n) -> Board (take (pos) b ++ [dec1 s n] ++ drop (pos+1) b) bw bb
     Nothing     -> error ("no getChip for takePiece " ++ show board ++ " " ++ show pos)
@@ -152,6 +133,38 @@ incBar :: Side -> Board -> Board
 incBar White (Board b bw bb) = Board b (bw+1) bb
 incBar Black (Board b bw bb) = Board b bw     (bb+1)
 
+-- Checks if bearing off is possible
+-- Only possible if
+-- For Black = no chips on any triangle b/w [7..24]
+-- For White = no chips on any triangle b/w [1..18]
+canBearOff :: Board -> Side -> Bool
+canBearOff bd@(Board b bw bb) side
+  | side==Black = (bb==0) && checkChipSide (takeLast 19 b) side
+  | otherwise   = (bw==0) && checkChipSide (take 19 b) side
+
+-- Get legal moves for a single dice (handles any value 1..36)
+-- get_normal_moves from backgammon.py
+singleDieLegalMoves :: Board -> Die -> Side -> Moves
+singleDieLegalMoves bd d side = moves 1 where
+  moves :: Pos -> Moves
+  moves 25 = []
+  moves i2 =
+    case getChip bd i2 of
+      Nothing -> nextMoves
+      -- if side same as chip, and 1 <= pos,move_pos <= 24 (in the board)
+      Just (s,n) -> if (s == side && i2<=24 && ni <= 24 && i2>=1 && ni>=1)
+                    then case getChip bd ni of
+                      -- Check if move_pos is legal
+                      Nothing -> Move i2 ni : nextMoves
+                      Just (s2,n2)  | s2==side ->   Move i2 ni : nextMoves
+                                    | otherwise ->  if (n2==1)
+                                                    then Move i2 ni : nextMoves
+                                                    else nextMoves
+                    else nextMoves
+      where nextMoves = moves (i2+1)
+            -- find next move_pos
+            ni = (i2 + d * direction side)
+
 -- play bear off move, assumes bear off possible
 bearOffMoves :: Board -> Die -> Side -> Moves
 bearOffMoves bd@(Board b bw bb) dieRoll side =
@@ -175,6 +188,47 @@ bearOffMoves bd@(Board b bw bb) dieRoll side =
                       where ind2 = if side==White then (25-i) else i
     end = if side==White then 25 else 0
 
--- TODO (implement get_moves from backgammon.py)
--- legalMoves :: Board -> Dice -> Side -> [Moves]
--- legalMoves bd@(Board b bw bb) dieRolls side =
+barMoves :: Board -> Die -> Side -> Moves
+barMoves bd@(Board b bw bb) dieRoll side =
+  case getChip bd ind of
+    Nothing -> [(Move (-1) ind)]
+    Just (s,n)  | s==side -> [(Move (-1) ind)]
+                | otherwise -> []
+    where ind = if side==White then (25-dieRoll) else dieRoll
+
+uniqueMoves :: [Moves] -> [Moves]
+uniqueMoves xs = uniqueMoves' Set.empty xs where
+  uniqueMoves' :: Set.Set(Moves) -> [Moves] -> [Moves]
+  uniqueMoves' _ [] = []
+  uniqueMoves' s (x:xs)
+   | x `Set.member` s || (reverse x) `Set.member` s = uniqueMoves' s xs
+   | otherwise = x : uniqueMoves' (Set.insert x s) xs
+
+-- Given a dice roll, board and a side, it gives legal moves
+-- Moves can be run on function move directly
+-- Checks bear offs, bar and normal moves as well
+-- Handles double dice rolls and permutations of dice
+legalMoves :: Board -> Dice -> Side -> [Moves]
+legalMoves bd dice side
+  | (length dieRolls == 4) = legalMoves' bd dieRolls side
+  | otherwise = uniqueMoves (legalMoves' bd dieRolls side ++
+                            legalMoves' bd (reverse dieRolls) side)
+  where dieRolls = dieList dice
+        legalMoves' :: Board -> [Die] -> Side -> [Moves]
+        legalMoves' _ [] _ = [[]]
+        legalMoves' bd@(Board b bw bb) dieRolls side
+          | (side==White && bw/=0) || (side==Black && bb/=0) =
+            if (length bMoves /= 0)
+            then [m:ms |  m <- bMoves,
+                          ms <- legalMoves' (move bd side m) nDRolls side]
+            else legalMoves' bd nDRolls side
+          | (length nMoves /= 0) =
+            [m:ms | m <- nMoves,
+                    ms <- legalMoves' (move bd side m) nDRolls side]
+          | otherwise = legalMoves' bd nDRolls side where
+              dRoll = head dieRolls
+              nDRolls = tail dieRolls
+              bMoves = barMoves bd dRoll side
+              nMoves =  if (canBearOff bd side)
+                        then (bearOffMoves bd dRoll side)
+                        else (singleDieLegalMoves bd dRoll side)
