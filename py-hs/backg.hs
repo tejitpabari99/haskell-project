@@ -375,8 +375,9 @@ diceRolls seed = nRolls seed 1000
 -- game always starts with white, change initialThrowWhite to initialThrowRandom to random start
 -- handles state and then loop, ends at game end only
 -- seed defines randomness, reproducable results
-gamePlay :: Int -> Either InvalidAction Game
-gamePlay seed = gamePlay' newGame 1 where
+-- TODO: Random shuffle moves (idk how to do in haskell)
+gamePlayRandom :: Int -> Either InvalidAction Game
+gamePlayRandom seed = gamePlay' newGame 1 where
   dRolls = diceRolls seed
   gamePlay' :: Game -> Int -> Either InvalidAction Game
   -- handle initial throw
@@ -400,3 +401,13 @@ gamePlay seed = gamePlay' newGame 1 where
       gamePlay' nextGame (n+1)
   -- End game
   gamePlay' game@Game{gameState = GameFinished side} n = Right (game)
+
+-- Player we play with
+player :: Side
+player = White
+
+-- TODO: Eval Func
+
+-- TODO: Expectiminimax
+
+-- TODO: Change gamePlayRandom to take in expecti move for a player. 
