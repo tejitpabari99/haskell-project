@@ -89,6 +89,11 @@ boardTest1 = Board [ Nothing, Just (Black, 2), Just (Black, 5), Just (White, 1),
                      Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Just (White, 5), Nothing, Just (White, 2), Just (White, 5), Just (Black, 1), Just (White, 2), Nothing
                     ] 0 0
 
+-- Test Board with elements in endzone
+endBoard :: Board
+endBoard = Board [ Just (White, 3), Just (White,2),  Nothing, Nothing, Nothing, Nothing, Just (Black, 5), Nothing, Just (Black, 3), Nothing, Nothing, Nothing, Just (White, 5),
+                   Just (Black, 5), Nothing, Nothing, Nothing, Just (White, 3), Nothing, Just (White, 5), Nothing, Nothing, Nothing, Nothing, Just (Black, 2), Nothing
+                  ] 0 0
 
 --------------- Helper Functions ---------------
 -- Take the last n elements from xs
@@ -406,7 +411,35 @@ gamePlayRandom seed = gamePlay' newGame 1 where
 player :: Side
 player = White
 
+
+-- Helper func - Takes a list of points, and returns a list of Ints
+-- +1 for White at every point
+-- -1 for Black at every point
+pointCounter point = case point of
+  Nothing -> 0
+  Just(a,b) -> case a of
+    White -> b
+    Black -> (-b)
+
 -- TODO: Eval Func
+eval :: Board -> Side -> Int
+eval (Board board barWhite barBlack) side = finalValue where
+  boardValues = map pointCounter board
+  len = length $ filter (>0) boardValues
+  distanceList = case side of
+    White -> filter (>0) $ zipWith (*) [24, 23..1] $ tail boardValues
+    Black -> filter (<0) $ zipWith (*) [1..24] $ tail boardValues
+  distance = abs $ sum distanceList
+  homeCheckers = case side of
+    White -> last boardValues
+    Black -> abs $ head boardValues
+  opponentCheckers = case side of
+    White -> abs $ head boardValues
+    Black -> last boardValues
+  barWeight = case side of
+    White -> barWhite
+    Black -> barBlack
+  finalValue = 10 * homeCheckers - distance - 10 * barWeight - 10* opponentCheckers
 
 -- TODO: Expectiminimax
 
