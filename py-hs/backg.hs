@@ -91,7 +91,7 @@ boardTest1 = Board [ Nothing, Just (Black, 2), Just (Black, 5), Just (White, 1),
 
 -- Test Board with elements in endzone
 endBoard :: Board
-endBoard = Board [ Just (White, 3), Just (White,2),  Nothing, Nothing, Nothing, Nothing, Just (Black, 5), Nothing, Just (Black, 3), Nothing, Nothing, Nothing, Just (White, 5),
+endBoard = Board [ Nothing, Just (White,1),  Nothing, Nothing, Nothing, Nothing, Just (Black, 5), Nothing, Just (Black, 3), Nothing, Nothing, Nothing, Just (White, 5),
                    Just (Black, 5), Nothing, Nothing, Nothing, Just (White, 3), Nothing, Just (White, 5), Nothing, Nothing, Nothing, Nothing, Just (Black, 2), Nothing
                   ] 0 0
 
@@ -425,20 +425,21 @@ pointCounter point = case point of
 eval :: Board -> Side -> Int
 eval (Board board barWhite barBlack) side = finalValue where
   boardValues = map pointCounter board
-  len = length $ filter (>0) boardValues
+  whitePieces = sum $ filter (>0) boardValues
+  blackPieces = abs $ sum $ filter (<0) boardValues
   distanceList = case side of
     White -> filter (>0) $ zipWith (*) [24, 23..1] $ tail boardValues
     Black -> filter (<0) $ zipWith (*) [1..24] $ tail boardValues
   distance = abs $ sum distanceList
-  homeCheckers = case side of
-    White -> last boardValues
-    Black -> abs $ head boardValues
-  opponentCheckers = case side of
-    White -> abs $ head boardValues
-    Black -> last boardValues
   barWeight = case side of
     White -> barWhite
     Black -> barBlack
+  homeCheckers = case side of
+    White -> 15 - barWhite - whitePieces
+    Black -> 15 - barBlack - blackPieces
+  opponentCheckers = case side of
+    White -> 15 - barBlack - blackPieces
+    Black -> 15 - barWhite - whitePieces
   finalValue = 10 * homeCheckers - distance - 10 * barWeight - 10* opponentCheckers
 
 -- TODO: Expectiminimax
