@@ -95,6 +95,16 @@ endBoard = Board [ Nothing, Just (White,1),  Nothing, Nothing, Nothing, Nothing,
                    Just (Black, 5), Nothing, Nothing, Nothing, Just (White, 3), Nothing, Just (White, 5), Nothing, Nothing, Nothing, Nothing, Just (Black, 2), Nothing
                   ] 0 0
 
+
+allDiceRolls :: [Dice]
+allDiceRolls = [(1,1), (1,2), (1,3), (1,4), (1,5), (1,6),
+                (2,2), (2,3), (2,4), (2,5), (2,6),
+                (3,3), (3,4), (3,5), (3,6),
+                (4,4), (4,5), (4,6),
+                (5,5), (5,6),
+                (6,6)]
+
+
 --------------- Helper Functions ---------------
 -- Take the last n elements from xs
 takeLast :: Int -> [a] -> [a]
@@ -442,6 +452,16 @@ eval (Board board barWhite barBlack) side = finalValue where
     Black -> 15 - barWhite - whitePieces
   finalValue = 10 * homeCheckers - distance - 10 * barWeight - 10* opponentCheckers
 
--- TODO: Expectiminimax
+-- Helper function
+-- Takes a list of moves, and performs them on the same board
+performMoves board _ [] = board
+performMoves (Left error) side (x:xs) = Left error
+performMoves (Right board) side (x:xs) = performMoves (move side board x) side xs
+
+-- -- TODO: Expectiminimax
+-- expectinode board side depth = allBoards where
+--   allLegalMoves = legalMoves board (allDiceRolls !! 1) side
+--   allBoards = performMoves board side $ head allLegalMoves
+  
 
 -- TODO: Change gamePlayRandom to take in expecti move for a player. 
