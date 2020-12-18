@@ -1,7 +1,8 @@
-import Debug.Trace(trace)
+-- import Debug.Trace(trace)
 import Control.Monad (foldM)
 import qualified Data.Set as Set
 import qualified System.Random as R (mkStdGen, randomRs)
+import Data.List(sortBy)
 
 type Die = Int
 type Dice = (Die, Die)
@@ -60,8 +61,28 @@ data Board
 data Game = Game { gameBoard :: Board,
                   gameActions :: [GameAction],
                   gameState :: GameState}
-  deriving (Eq, Show)
+  deriving (Eq)
 
+instance Show Game where
+  show game = "Game Board: " ++ show board ++
+              "\n\nGame Actions: " ++ show actions ++
+              "\n\nGame State: " ++ show state where
+    board = gameBoard game
+    actions = if (length gActions >=6)
+              then (show $ take 3 gActions) ++ ".........." ++ (show $ takeLast 3 gActions)
+              else show gActions
+    state = gameState game
+    gActions = gameActions game
+
+-- splitComm xs = split xs ','
+--
+-- split :: String -> Char -> [String]
+-- split [] delim = [""]
+-- split (c:cs) delim
+--     | c == delim = "" : rest
+--     | otherwise = (c : head rest) : tail rest
+--     where
+--         rest = split cs delim
 
 -- Start with this board
 initialBoard :: Board
@@ -97,12 +118,7 @@ endBoard = Board [ Nothing, Just (White,1),  Nothing, Nothing, Nothing, Nothing,
 
 
 allDiceRolls :: [Dice]
-allDiceRolls = [(1,1), (1,2), (1,3), (1,4), (1,5), (1,6),
-                (2,2), (2,3), (2,4), (2,5), (2,6),
-                (3,3), (3,4), (3,5), (3,6),
-                (4,4), (4,5), (4,6),
-                (5,5), (5,6),
-                (6,6)]
+allDiceRolls = [(i,j) | i <- [1..6], j <- [i..6]]
 
 
 --------------- Helper Functions ---------------
@@ -135,7 +151,7 @@ checkChipSide (p:pts) side = case p of
   -- If Nothing, then move on to next point
   Nothing -> checkChipSide pts side
   -- Otherwise, check if chips side == given side
-  Just (s,chips)  | s==side -> False
+  Just (s,_)  | s==side -> False
                   | otherwise -> checkChipSide pts side
 
 dieList :: Dice -> [Die]
@@ -161,24 +177,25 @@ decBar side (Board b bw bb) | side==White && bw>0 = Right (Board b (bw-1) bb)
 -- bear off handled by moving and removing the piece from the board
 -- Enter (bar) handled by subtracting from bar
 move :: Side -> Board -> Move -> Either InvalidDecisionType Board
-move side board m@(Move from to) = handleMoves board side from to
-move side board m@(BearOff from to) = handleBearOffMove (handleMoves board side from to) side
-move side board m@(Enter from to) = takePiece from board side >>= landPiece to side
+move side board (Move from to) = handleMoves board side from to
+move side board (BearOff from to) = handleBearOffMove (handleMoves board side from to) side
+move side board (Enter from to) = takePiece from board side >>= landPiece to side
 
 -- Handle regular moves
 handleMoves :: Board -> Side -> Pos -> Pos -> Either InvalidDecisionType Board
 handleMoves board side from to =
   case getChip board from of
-    Just (s,n)  -> takePiece from board side >>= landPiece to side
+    Just (_,_)  -> takePiece from board side >>= landPiece to side
     Nothing     -> Left (NoPieces from)
 
 -- Handle Bear off moves
 handleBearOffMove :: Either InvalidDecisionType Board -> Side -> Either InvalidDecisionType Board
 handleBearOffMove board side =
   case board of
-    Right (boar@(Board bd bw bb)) | side==Black -> Right (Board ([Nothing] ++ (tail bd)) bw bb)
-                                  | side==White -> Right (Board ((take 25 bd) ++ [Nothing]) bw bb)
-    Left err                      -> Left err
+    Right (Board bd bw bb)  | side==Black -> Right (Board ([Nothing] ++ (tail bd)) bw bb)
+                            | side==White -> Right (Board ((take 25 bd) ++ [Nothing]) bw bb)
+    Right (Board _ _ _)     -> board
+    Left err                -> Left err
 
 -- take piece from the board, throws error on nonlegality
 takePiece :: Pos -> Board -> Side -> Either InvalidDecisionType Board
@@ -197,14 +214,10 @@ landPiece pos side board@(Board b bw bb) =
   case getChip board pos of
     Nothing                 -> Right (setField (Just (side, 1)))
     Just (s, n) | s == side -> Right (setField (Just (side, n+1)))
-    Just (s, n) | n == 1    -> Right (incBar (opposite side) (setField (Just (side, 1))))
+    Just (_, n) | n == 1    -> Right (incBar (opposite side) (setField (Just (side, 1))))
     _                       -> Left (MovedOntoOpponentsClosedPoint pos)
   where
     setField f = Board (take (pos) b ++ [f] ++ drop (pos+1) b) bw bb
-    updatedCount =
-      case getChip board pos of
-        Just (_, n) -> n+1
-        Nothing     -> 1
 
 -- Get legal moves for a single dice (handles any value 1..36)
 -- get_normal_moves from backgammon.py
@@ -216,7 +229,7 @@ singleDieLegalMoves bd d side = moves 1 where
     case getChip bd i2 of
       Nothing -> nextMoves
       -- if side same as chip, and 1 <= pos,move_pos <= 24 (in the board)
-      Just (s,n) -> if (s == side && i2<=24 && ni <= 24 && i2>=1 && ni>=1)
+      Just (s,_) -> if (s == side && i2<=24 && ni <= 24 && i2>=1 && ni>=1)
                     then case getChip bd ni of
                       -- Check if move_pos is legal
                       Nothing -> Move i2 ni : nextMoves
@@ -235,13 +248,13 @@ singleDieLegalMoves bd d side = moves 1 where
 -- For Black = no chips on any triangle b/w [7..24]
 -- For White = no chips on any triangle b/w [1..18]
 canBearOff :: Board -> Side -> Bool
-canBearOff bd@(Board b bw bb) side
+canBearOff (Board b bw bb) side
   | side==Black = (bb==0) && checkChipSide (takeLast 19 b) side
   | otherwise   = (bw==0) && checkChipSide (take 19 b) side
 
 -- play bear off move, assumes bear off possible
 bearOffMoves :: Board -> Die -> Side -> [Move]
-bearOffMoves bd@(Board b bw bb) dieRoll side =
+bearOffMoves bd dieRoll side =
   directMoves ++ homeMoves ++ bigBearOff where
     -- direct bearoffs (if chip at 5 away from bearoff and die roll 5)
     directMoves :: [Move]
@@ -258,17 +271,17 @@ bearOffMoves bd@(Board b bw bb) dieRoll side =
                   bigBearOffFunc i =
                     case getChip bd ind2 of
                       Nothing -> bigBearOffFunc (i+1)
-                      Just (s,n)  | s==side && i<dieRoll -> BearOff ind2 end : bigBearOffFunc (i+1)
+                      Just (s,_)  | s==side && i<dieRoll -> BearOff ind2 end : bigBearOffFunc (i+1)
                                   | otherwise -> bigBearOffFunc (i+1)
                       where ind2 = if side==White then (25-i) else i
     end = if side==White then 25 else 0
 
 
 barMoves :: Board -> Die -> Side -> [Move]
-barMoves bd@(Board b bw bb) dieRoll side =
+barMoves bd dieRoll side =
   case getChip bd ind of
     Nothing -> [(Enter (-1) ind)]
-    Just (s,n)  | s==side -> [(Enter (-1) ind)]
+    Just (s,_)  | s==side -> [(Enter (-1) ind)]
                 | otherwise -> []
     where ind = if side==White then (25-dieRoll) else dieRoll
 
@@ -278,26 +291,26 @@ uniqueMoves :: [[Move]] -> [[Move]]
 uniqueMoves xs = uniqueMoves' Set.empty xs where
   uniqueMoves' :: Set.Set([Move]) -> [[Move]] -> [[Move]]
   uniqueMoves' _ [] = []
-  uniqueMoves' s (x:xs)
-   | x `Set.member` s || (reverse x) `Set.member` s = uniqueMoves' s xs
-   | otherwise = x : uniqueMoves' (Set.insert x s) xs
+  uniqueMoves' s (x:xss)
+   | x `Set.member` s || (reverse x) `Set.member` s = uniqueMoves' s xss
+   | otherwise = x : uniqueMoves' (Set.insert x s) xss
 
 -- Given a dice roll, board and a side, it gives legal moves
 -- Moves can be run on function move directly
 -- Checks bear offs, bar and normal moves as well
 -- Handles double dice rolls and permutations of dice
 legalMoves :: Board -> Dice -> Side -> [[Move]]
-legalMoves bd dice side
+legalMoves bdM dice side
   -- if both die values same, double dice roll
-  | (length dieRolls == 4) = legalMoves' (Right bd) dieRolls
+  | (length dieRollsM == 4) = legalMoves' (Right bdM) dieRollsM
   -- otherwise dice + reverse dice
-  | otherwise = uniqueMoves (legalMoves' (Right bd) dieRolls ++
-                            legalMoves' (Right bd) (reverse dieRolls))
-  where dieRolls = dieList dice
+  | otherwise = uniqueMoves (legalMoves' (Right bdM) dieRollsM ++
+                            legalMoves' (Right bdM) (reverse dieRollsM))
+  where dieRollsM = dieList dice
         legalMoves' :: Either InvalidDecisionType Board -> [Die] -> [[Move]]
         legalMoves' _ [] = [[]]
         legalMoves' (Left _) _ = [[]]
-        legalMoves' (Right bd@(Board b bw bb)) dieRolls
+        legalMoves' (Right bd@(Board _ bw bb)) dieRolls
           -- check bar moves
           | (side==White && bw/=0) || (side==Black && bb/=0) =
             if (length bMoves /= 0)
@@ -338,7 +351,7 @@ first _ (Right r) = Right r
 
 -- check if game has ended (no pieces left on board of side)
 checkGameEnd :: Board -> Side -> Bool
-checkGameEnd board@(Board b bw bb) side = (bar==0) && (checkChipSide b side) where
+checkGameEnd (Board b bw bb) side = (bar==0) && (checkChipSide b side) where
   bar = if side==White then bw else bb
 
 -- handles the different actions
@@ -349,7 +362,7 @@ performAction act@(InitialThrows dw db) game@Game{gameState = PlayersToThrowInit
                 else PlayersToThrowInitial) act where
                   side = if dw > db then White else Black
 -- Move
-performAction act@(PlayerAction pSide m@(Moves moves)) game@Game{gameState = ToMove side dice} | pSide==side =
+performAction act@(PlayerAction pSide m@(Moves moves)) game@Game{gameState = ToMove side _} | pSide==side =
   do  updatedBoard <- wrapInInvalidDecision (foldM (move side) board moves)
       if (checkGameEnd updatedBoard side)
       then success (game {gameBoard = updatedBoard}) (GameFinished side) act -- Game finished
@@ -386,13 +399,16 @@ nRolls seed n = zip (take n s1) (take n s2)
 diceRolls :: Int -> [Dice]
 diceRolls seed = nRolls seed 1000
 
+getRandomMove :: [[Move]] -> Int -> [Move]
+getRandomMove [] _ = []
+getRandomMove moves seed = moves !! (head $ R.randomRs (0,((length moves)-1)) (R.mkStdGen seed) :: Int)
+
 -- loops through and plays a game
 -- game always starts with white, change initialThrowWhite to initialThrowRandom to random start
 -- handles state and then loop, ends at game end only
 -- seed defines randomness, reproducable results
--- TODO: Random shuffle moves (idk how to do in haskell)
-gamePlayRandom :: Int -> Either InvalidAction Game
-gamePlayRandom seed = gamePlay' newGame 1 where
+gamePlay :: Side -> Int -> Int -> Int -> Either InvalidAction Game
+gamePlay pSide depth pruningDepth seed = gamePlay' newGame 1 where
   dRolls = diceRolls seed
   gamePlay' :: Game -> Int -> Either InvalidAction Game
   -- handle initial throw
@@ -406,8 +422,12 @@ gamePlayRandom seed = gamePlay' newGame 1 where
     do
       let board = gameBoard game
       let validMoves = legalMoves board dice side
-      let move = if (length validMoves > 0) then (head validMoves) else []
-      nextGame <- performAction (PlayerAction side (Moves move)) game
+      -- let randomMove = if (length validMoves > 0) then (head validMoves) else []
+      let randomMove = getRandomMove validMoves seed
+      let moveI =  if pSide == side
+                  then bestMove board dice side depth pruningDepth
+                  else randomMove
+      nextGame <- performAction (PlayerAction side (Moves moveI)) game
       gamePlay' nextGame n
   -- Dice throw
   gamePlay' game@Game{gameState = ToThrow side} n =
@@ -415,26 +435,29 @@ gamePlayRandom seed = gamePlay' newGame 1 where
       nextGame <- performAction (PlayerAction side (Throw (dRolls !! n))) game
       gamePlay' nextGame (n+1)
   -- End game
-  gamePlay' game@Game{gameState = GameFinished side} n = Right (game)
-
--- Player we play with
-player :: Side
-player = White
-
+  gamePlay' game@Game{gameState = GameFinished _} _ = Right (game)
 
 -- Helper func - Takes a list of points, and returns a list of Ints
 -- +1 for White at every point
 -- -1 for Black at every point
+pointCounter :: Point -> Int
 pointCounter point = case point of
   Nothing -> 0
   Just(a,b) -> case a of
     White -> b
     Black -> (-b)
 
--- TODO: Eval Func
+homeBoardChips :: Board -> Side -> Int
+homeBoardChips bd side = sum [(checkChip i) | i <- range] where
+  range = if side==White then [19..24] else [1..6]
+  checkChip ind = case getChip bd ind of
+    Nothing -> 0
+    Just (s,n) -> if (s==side) then n else 0
+
 eval :: Board -> Side -> Int
-eval (Board board barWhite barBlack) side = finalValue where
-  boardValues = map pointCounter board
+-- eval bd@(Board b bw bb) side = trace (show $ [distance, barWeight, homeWin, homeChips, opponentChips]) finalValue where
+eval bd@(Board b bw bb) side = finalValue where
+  boardValues = map pointCounter b
   whitePieces = sum $ filter (>0) boardValues
   blackPieces = abs $ sum $ filter (<0) boardValues
   distanceList = case side of
@@ -442,26 +465,89 @@ eval (Board board barWhite barBlack) side = finalValue where
     Black -> filter (<0) $ zipWith (*) [1..24] $ tail boardValues
   distance = abs $ sum distanceList
   barWeight = case side of
-    White -> barWhite
-    Black -> barBlack
-  homeCheckers = case side of
-    White -> 15 - barWhite - whitePieces
-    Black -> 15 - barBlack - blackPieces
-  opponentCheckers = case side of
-    White -> 15 - barBlack - blackPieces
-    Black -> 15 - barWhite - whitePieces
-  finalValue = 10 * homeCheckers - distance - 10 * barWeight - 10* opponentCheckers
+    White -> bw
+    Black -> bb
+  homeWin = case side of
+    White -> 15 - bw - whitePieces
+    Black -> 15 - bb - blackPieces
+  -- opponentWin = case side of
+  --   White -> 15 - bb - blackPieces
+  --   Black -> 15 - bw - whitePieces
+  homeChips = homeBoardChips bd side
+  opponentChips = (homeBoardChips bd (opposite side))
+  finalValue = homeChips + 10 * homeWin - distance - 10 * barWeight - opponentChips
 
--- Helper function
--- Takes a list of moves, and performs them on the same board
-performMoves board _ [] = board
-performMoves (Left error) side (x:xs) = Left error
-performMoves (Right board) side (x:xs) = performMoves (move side board x) side xs
+performMoves :: Board -> Side -> [Move] -> Either InvalidDecisionType Board
+performMoves board _ [] = (Right board)
+performMoves board side (m:ms) = case (move side board m) of
+  (Left l) -> Left l
+  (Right newBoard) -> performMoves newBoard side ms
 
--- -- TODO: Expectiminimax
--- expectinode board side depth = allBoards where
---   allLegalMoves = legalMoves board (allDiceRolls !! 1) side
---   allBoards = performMoves board side $ head allLegalMoves
-  
+bestMove :: Board -> Dice -> Side -> Int -> Int -> [Move]
+bestMove board diceRoll side depth pruningDepth = bestMove' forwardPruningMoves (-1/0) [] where
+  allLegalMoves = legalMoves board diceRoll side
+  forwardPruningMoves = forwardPruning board side allLegalMoves pruningDepth
+  bestMove' :: (Ord t, Fractional t) => [[Move]] -> t -> [Move] -> [Move]
+  bestMove' [] _ bestMoveA = bestMoveA
+  bestMove' (mv:mvs) bestScore bestMoveA = case (performMoves board side mv) of
+    (Left _) -> bestMove' mvs bestScore bestMoveA
+    (Right upBoard) -> bestMove' mvs newBestScore newBestMove where
+      expectiRes = expectinode upBoard side (opposite side) bestScore (1/0) depth pruningDepth
+      newBestScore = if (expectiRes>bestScore) then expectiRes else bestScore
+      newBestMove = if (expectiRes>bestScore) then mv else bestMoveA
 
--- TODO: Change gamePlayRandom to take in expecti move for a player. 
+expectinode :: (Ord t, Fractional t) => Board -> Side -> Side -> t -> t -> Int -> Int -> t
+expectinode board side _ _ _ 0 _ = fromIntegral $ eval board side
+expectinode board side currSide alpha beta depth pruningDepth
+  | side==currSide = sumAllDice minValue
+  | otherwise = sumAllDice maxValue where
+    sumAllDice func = sum [(multiplier diceRoll)*(func board side currSide diceRoll alpha beta depth pruningDepth)
+                            | diceRoll <- allDiceRolls]
+    multiplier (d1,d2) = if (d1==d2) then (1/36) else (1/18)
+
+minValue :: (Fractional t, Ord t) => Board -> Side -> Side -> Dice -> t -> t -> Int -> Int -> t
+minValue board side currSide diceRoll alpha beta depth pruningDepth
+  | length allLegalMoves > 0 = minValue' forwardPruningMoves alpha beta (1/0)
+  | otherwise = expectinode board side (opposite currSide) alpha beta (depth-1) pruningDepth where
+    allLegalMoves = legalMoves board diceRoll currSide
+    forwardPruningMoves = forwardPruning board currSide allLegalMoves pruningDepth
+    minValue' :: (Ord t, Fractional t) => [[Move]] -> t -> t -> t -> t
+    minValue' [] _ _ bestScore = bestScore
+    minValue' (mv:mvs) al bt bestScore = case (performMoves board currSide mv) of
+      (Left _) -> minValue' mvs al bt bestScore
+      (Right newBoard) -> if newBestScore <= al
+                          then newBestScore
+                          else minValue' mvs al newBt newBestScore where
+        expectiRes = expectinode newBoard side (opposite currSide) al bt (depth-1) pruningDepth
+        newBestScore = min bestScore expectiRes
+        newBt = min bt newBestScore
+
+maxValue :: (Fractional t, Ord t) => Board -> Side -> Side -> Dice -> t -> t -> Int -> Int -> t
+maxValue board side currSide diceRoll alpha beta depth pruningDepth
+  | length allLegalMoves > 0 = maxValue' forwardPruningMoves alpha beta (-1/0)
+  | otherwise = expectinode board side (opposite currSide) alpha beta (depth-1) pruningDepth where
+    allLegalMoves = legalMoves board diceRoll currSide
+    forwardPruningMoves = forwardPruning board currSide allLegalMoves pruningDepth
+    maxValue' :: (Ord t, Fractional t) => [[Move]] -> t -> t -> t -> t
+    maxValue' [] _ _ bestScore = bestScore
+    maxValue' (mv:mvs) al bt bestScore = case (performMoves board currSide mv) of
+      (Left _) -> maxValue' mvs al bt bestScore
+      (Right newBoard) -> if newBestScore >= bt
+                          then newBestScore
+                          else maxValue' mvs newAl bt newBestScore where
+        expectiRes = expectinode newBoard side (opposite currSide) al bt (depth-1) pruningDepth
+        newBestScore = max bestScore expectiRes
+        newAl = max al newBestScore
+
+forwardPruning :: Board -> Side -> [[Move]] -> Int -> [[Move]]
+forwardPruning board side moves k
+  | length moves < k = moves
+  | otherwise = [mv | (_,mv) <- (take k sortedFordwardPruningList)] where
+    sortedFordwardPruningList = sortBy (\x y -> compare (fst x) (fst y)) fordwardPruningList
+    fordwardPruningList = zip [-1*(fordwardPruning' mv) | mv <- moves] moves
+    fordwardPruning' mv = case (performMoves board side mv) of
+      (Left _) -> 0
+      (Right newBoard) -> eval newBoard side
+
+-- forwardPruningK :: Board -> Side -> [[Move]] -> [[Move]]
+-- forwardPruningK board side moves = forwardPruning board side moves 2

@@ -14,7 +14,7 @@ import sys
 
 infinity = float('inf')
 player = 0
-MAX_DEPTH = 4
+MAX_DEPTH = 1
 dummy_action = [[0,0], [0,0]]
 all_rolls = [[i,j] if i!=j else [i]*4 for i in range(1,7) for j in range(i,7)]
 
@@ -191,10 +191,11 @@ def eval_fn(state):
     for i in range(1, 25):
         if len(board[i]) > 0 and board[i][0] == m_player:
             distance+= len(board[i])*(abs(25 - i) if m_player==1 else abs(0-i))
+
     v = -1*distance
     home_checkers = 0
-    for i in range(1, 6):
-        index = 18 + i if (1 == m_player) else (7 - i)
+    for i in range(1, 7):
+        index = 18 + i if (1 == m_player) else (i)
         if len(board[index])>0:
             home_checkers+=len(board[index])
     v+=home_checkers
@@ -205,6 +206,11 @@ def eval_fn(state):
         index = 18 + i if (2 == m_player) else (7 - i)
         if len(board[index])>0:
             opponent_checkers+=len(board[index])
+    # print(distance)
+    # print(bar[m_player])
+    # print((len(board[25]) if m_player==1 else len(board[0])))
+    # print(home_checkers)
+    # print(opponent_checkers)
     v-=opponent_checkers
     return v
 
@@ -227,14 +233,14 @@ def minimaxnode(state, game, roll, depth):
         v = score_fn(v, expectinode(game.result(state,a), game, depth))
     return score_fn(roll_scores)
 '''
-def forward_pruning(state, actions, game, k=4):
+def forward_pruning(state, actions, game, k=1):
     if len(actions) < k:
         return actions
     score_list = []
     new_action_list = []
     for a in actions:
         new_state = game.result(state,a)
-        score_list.append(eval_fn(state))
+        score_list.append(eval_fn(new_state))
     #arr = np.array(score_list)
     indices = sorted(range(len(score_list)), key=lambda i:score_list[i])[-k:][::-1]
     for i in indices:
@@ -285,7 +291,7 @@ def get_best_move(state, game, dice_rolls):
     best_action = None
     beta = infinity
 
-    depth = 1
+    depth = 2
     actions = game.actions(state, dice_rolls)
     actions = forward_pruning(state, actions, game)
     for a in actions:
@@ -299,20 +305,20 @@ if __name__ == '__main__':
     board = []
     bar = []
     dice_rolls = []
-    player = 2
-    initialBoard = [[0], [1]*2, [0], [0], [0], [0], [2]*5, [0], [2]*3, [0], [0], [0], [1]*5,
-                    [2]*5, [0], [0], [0], [1]*3, [0], [1]*5, [0], [0], [0], [0], [2]*2, [0]]
-    boardTest1 = [[0], [2]*2, [2]*5, [1]*1, [2]*2, [0], [0], [0], [0], [0], [0], [0], [0],
-                  [0], [0], [0], [0], [0], [0], [1]*5, [0], [1]*2, [1]*5, [2]*1, [1]*2, [0]]
-    bearOffBoard = [[0], [0], [2]*3, [0], [0], [0], [0], [0], [0], [0], [0], [0], [0],
-                  [0], [0], [0], [0], [0], [0], [0], [0], [0], [0], [0], [0], [0]]
-    barBoard = [[0], [0], [2]*3, [1]*3, [0], [0], [0], [0], [0], [0], [0], [0], [0],
-                  [0], [0], [0], [0], [0], [0], [0], [0], [0], [0], [0], [0], [0]]
+    player = 1
+    initialBoard = [[], [1]*2, [], [], [], [], [2]*5, [], [2]*3, [], [], [], [1]*5,
+                    [2]*5, [], [], [], [1]*3, [], [1]*5, [], [], [], [], [2]*2, []]
+    boardTest1 = [[], [2]*2, [2]*5, [1]*1, [2]*2, [], [], [], [], [], [], [], [],
+                  [], [], [], [], [], [], [1]*5, [], [1]*2, [1]*5, [2]*1, [1]*2, []]
+    bearOffBoard = [[2]*12, [], [2]*3, [], [], [], [], [], [], [], [], [], [],
+                  [], [], [], [], [], [], [], [], [], [], [], [1]*2, [1]*13]
+    barBoard = [[], [], [2]*3, [1]*3, [], [], [], [], [], [], [], [], [],
+                  [], [], [], [], [], [], [], [], [], [], [], [], []]
     barbar = [0,0,2]
 
     bar = [0,0,0]
     board = initialBoard
-    board = boardTest1
+    # board = boardTest1
     # board = bearOffBoard
     # board, bar = barBoard, barbar
 
@@ -326,16 +332,19 @@ if __name__ == '__main__':
     player = int(sys.argv[1])
     # diceRoll = sys.argv[2]
     # print(sys.argv[2], type(sys.argv[2]))
-    dice_rolls = [6,3]
-    actions = game.actions(game_state,dice_rolls)
-    removeList = []
-    for move in actions:
-        if move in removeList: continue
-        move2 = [move[1], move[0]]
-        if move2 in actions:
-            removeList.append(move2)
-    for rm in removeList: actions.remove(rm)
-    print(actions)
+    # dice_rolls = [6,3]
+    # actions = game.actions(game_state,dice_rolls)
+    # removeList = []
+    # for move in actions:
+    #     if move in removeList: continue
+    #     move2 = [move[1], move[0]]
+    #     if move2 in actions:
+    #         removeList.append(move2)
+    # for rm in removeList: actions.remove(rm)
+    # print(actions)
+    # print(eval_fn(game_state))
+
+    print(get_best_move(game_state, game, [1,2]))
 
     #print(game.actions(game_state, dice_rolls))
     # moves = get_best_move(game_state, game, dice_rolls)
